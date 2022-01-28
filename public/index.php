@@ -1,104 +1,51 @@
-<?php
+<?php 
+require_once(__DIR__ . '/service/auth.php');
+require_once(__DIR__ . '/service/board.php');
 
-$dbh = new PDO('mysql:host=mysql;dbname=techc', 'root', '');
+session_start();
 
-if(isset($_POST['message']) && !empty($_POST['message'])) {
-  $imgFile = null;
-  if(isset($_FILES['image']) && !empty($_FILES['image']['tmp_name'])) {
-    if(preg_match('/^image\//', $_FILES['image']['type']) !== 1) {
-      header("HTTP/1.1 302 Found");
-      header("LOCATION: ./index.php");
-    }
-    $pathInfo = pathinfo($_FILES['image']['name']);
-    $extension = $pathInfo['extension'];
-
-    $imgFile = strval(time()) . bin2hex(random_bytes(25)) . '.' . $extension;
-    $filepath = '/var/www/public/image/' . $imgFile;
-    move_uploaded_file($_FILES['image']['tmp_name'], $filepath);
-  }
-
-  $sql = "INSERT INTO bbs (message, image_filename) VALUES (:message, :image_filename)";
-  $prepare = $dbh->prepare($sql);
-  $prepare->bindValue('message', $_POST['message']);
-  $prepare->bindValue('image_filename', $imgFile);
-  $prepare->execute();
-
-  header("HTTP/1.1 302 Found");
-  header("LOCATION: ./index.php");
-  return;
-}
-
-$sql = "SELECT * FROM bbs ORDER BY created_at DESC";
-$prepare = $dbh->prepare($sql);
-$prepare->execute();
-
+$select = getMessage();
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="./style.css">
-  <title>Document</title>
-</head>
-<body>
-  <form action="./index.php" method="post" enctype="multipart/form-data">
-    <textarea name="message"></textarea>
-    <div>
-      <input type="file" accept="image/*" name="image" id="image">
-    </div>
-    <div>
-      <button>submit</button>
-    </div>
-  </form>
 
-  <table>
-    <tr>
-      <td>
-        no
-      </td>
-      <td>
-        date
-      </td>
-      <td>
-        message
-      </td>
-      <td>
-        image
-      </td>
-    </tr>
-    <?php foreach($prepare as $val): ?>
-    <tr>
-      <td class='no'><?= $val['id'] ?></td>
-      <td><?= $val['created_at'] ?></td>
-      <td><?= nl2br(htmlspecialchars($val['message'])); ?></td>
-      <?php if(isset($val['image_filename'])): ?>
-        <td>
-          <img src="/image/<?= $val['image_filename'] ?>">
-        </td>
-      <?php else: ?>
-        <td>
-          -
-        </td>
+<?php if(empty($_SESSION['user_id'])): ?>
+  <a href="/login.php">ログイン</a>して自分のタイムラインを閲覧しましょう！
+<?php else: ?>
+  <a href="/timeline.php">タイムラインはこちら</a>
+<?php endif; ?>
+<hr>
+
+<?php foreach($select as $entry): ?>
+  <dl style="margin-bottom: 1em; padding-bottom: 1em; border-bottom: 1px solid #ccc;">
+    <dt id="entry<?= htmlspecialchars($entry['id']) ?>">
+      番号
+    </dt>
+    <dd>
+      <?= htmlspecialchars($entry['id']) ?>
+    </dd>
+    <dt>
+      投稿者
+    </dt>
+    <dd>
+      <a href="/profile.php?user_id=<?= $entry['user_id'] ?>">
+        <?php if(!empty($entry['user_icon_filename'])): // アイコン画像がある場合は表示 ?>
+        <img src="/image/<?= $entry['user_icon_filename'] ?>"
+          style="height: 2em; width: 2em; border-radius: 50%; object-fit: cover;">
+        <?php endif; ?>
+
+        <?= htmlspecialchars($entry['user_name']) ?>
+        (ID: <?= htmlspecialchars($entry['user_id']) ?>)
+      </a>
+    </dd>
+    <dt>日時</dt>
+    <dd><?= $entry['created_at'] ?></dd>
+    <dt>内容</dt>
+    <dd>
+      <?= bodyFilter($entry['body']) ?>
+      <?php if(!empty($entry['image_filename'])): ?>
+      <div>
+        <img src="/image/<?= $entry['image_filename'] ?>" style="max-height: 10em;">
+      </div>
       <?php endif; ?>
-    <?php endforeach; ?>
-  </table>
-
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const imageInput = document.getElementById("image");
-      imageInput.addEventListener("change", () => {
-        if (imageInput.files.length < 1) {
-          return;
-        }
-        if (imageInput.files[0].size > 5 * 1024 * 1024) {
-          alert("this img over 5mb");
-          imageInput.value = "";
-        }
-      });
-    });
-</script>
-
-</body>
-</html>
+    </dd>
+  </dl>
+<?php endforeach ?>
